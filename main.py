@@ -25,7 +25,12 @@ def mlflow_init(tracking_uri: str, experiment_name: str):
 def export_to_onnx(model, save_path, input_shape=(1, 3, 256, 256)):
     """Export PyTorch model to ONNX format"""
     model.eval()
-    dummy_input = torch.randn(input_shape)
+    
+    # Get the device the model is on
+    device = next(model.parameters()).device
+    
+    # Create dummy input on the same device as the model
+    dummy_input = torch.randn(input_shape, device=device)
     
     # Export to ONNX
     torch.onnx.export(
@@ -48,13 +53,13 @@ def export_to_onnx(model, save_path, input_shape=(1, 3, 256, 256)):
 def main():
     tb_writer = SummaryWriter()
     cfg = Config()
-    cfg.num_epochs = 1
+    cfg.num_epochs = 50
     
     if not os.path.exists(cfg.data_dir):
         download_coco_dataset(cfg.data_dir)
     
     # MLflow setup 
-    tracking_uri = "sqlite:///mlflow.db"  
+    tracking_uri = "http://127.0.0.1:8080"  
     experiment_name = "posenet"
     mlflow_init(tracking_uri, experiment_name)
 
@@ -181,8 +186,12 @@ def main():
         if os.path.exists('checkpoints/best_model.pth'):
             mlflow.log_artifact('checkpoints/best_model.pth', "pytorch_model")
             
-        # Log the final model state
-        mlflow.pytorch.log_model(model, "model")
+        # Log the final model state with input example
+        device = next(model.parameters()).device
+        # Create input example as numpy array (also supported by MLflow)
+        input_example = torch.randn(1, 3, cfg.img_size, cfg.img_size, device=device)
+        input_example_np = input_example.cpu().numpy()
+        mlflow.pytorch.log_model(model, "model", input_example=input_example_np)
 
         print(f"\nTraining completed!")
 
