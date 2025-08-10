@@ -133,7 +133,7 @@ def main():
             mlflow.log_metrics({
                     "train_loss": train_loss,
                     "val_loss": validation_metrics['loss'],
-                    "val_AP@0.50": validation_metrics['AP@0.50'],
+                    "val_AP_0_50": validation_metrics['AP@0.50'],
                     "val_precision": validation_metrics['precision'],
                     "val_recall": validation_metrics['recall'],
                     "learning_rate": optimizer.param_groups[0]['lr']
