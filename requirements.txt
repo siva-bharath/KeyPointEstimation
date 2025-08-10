@@ -1,0 +1,34 @@
+# Core PyTorch dependencies
+torch>=1.12.0
+torchvision>=0.13.0
+torchaudio>=0.12.0
+
+# Data processing and visualization
+numpy>=1.21.0
+matplotlib>=3.5.0
+Pillow>=8.3.0
+opencv-python>=4.5.0
+
+# MLflow for experiment tracking
+mlflow>=1.30.0
+
+# TensorBoard for training visualization
+tensorboard>=2.10.0
+
+# ONNX for model export and inference
+onnx>=1.12.0
+onnxruntime>=1.12.0
+
+# COCO dataset utilities
+pycocotools>=2.0.6
+
+# Progress bars and utilities
+tqdm>=4.64.0
+
+# Additional utilities
+scikit-learn>=1.1.0
+pandas>=1.5.0
+
+# Development and testing 
+pytest>=7.0.0
+
