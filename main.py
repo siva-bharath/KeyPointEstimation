@@ -53,7 +53,7 @@ def export_to_onnx(model, save_path, input_shape=(1, 3, 256, 256)):
 def main():
     tb_writer = SummaryWriter()
     cfg = Config()
-    cfg.num_epochs = 50
+    cfg.num_epochs = 15
     
     if not os.path.exists(cfg.data_dir):
         download_coco_dataset(cfg.data_dir)
@@ -106,12 +106,8 @@ def main():
 
         # Loss and optimizer
         if cfg.loss_type == 'focal':
-            criterion = KeypointLoss(alpha=cfg.focal_alpha, beta=cfg.focal_beta, gamma=cfg.focal_gamma)
-        elif cfg.loss_type == 'focal_alt':
-            from train.loss import KeypointFocalLoss
             criterion = KeypointFocalLoss(alpha=cfg.focal_alpha, gamma=cfg.focal_gamma)
-        else:  # mse
-            from train.loss import KeypointMSELoss
+        else:  
             criterion = KeypointMSELoss()
             
         optimizer = optim.Adam(model.parameters(), lr=cfg.learning_rate)

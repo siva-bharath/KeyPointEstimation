@@ -32,7 +32,6 @@ class Config:
     early_stopping_patience: int = 10
     
     # Loss Config
-    loss_type: str = 'focal'  # Options: 'focal', 'focal_alt', 'mse'
+    loss_type: str = 'focal'  # Options: 'focal', 'mse'
     focal_alpha: float = 2.0
-    focal_beta: float = 4.0
     focal_gamma: float = 2.0
