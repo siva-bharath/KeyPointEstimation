@@ -1,0 +1,25 @@
+"# MLflow database and runs" 
+"mlflow.db" 
+"mlruns/" 
+"runs/" 
+"checkpoints/" 
+"__pycache__/" 
+"*.pth" 
+"*.onnx" 
+"*.png" 
+"*.jpg" 
+"*.jpeg" 
+".DS_Store" 
+"Thumbs.db" 
+# Dataset images and large files
+dataset/images/
+dataset/coco/
+dataset/train2017/
+dataset/val2017/
+dataset/annotations/
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.tiff
+*.tif

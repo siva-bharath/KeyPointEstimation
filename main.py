@@ -1,0 +1,188 @@
+import os
+
+import torch
+import torchvision.transforms as transforms
+from torch.utils.data import DataLoader
+import torch.optim as optim
+from torch.utils.tensorboard import SummaryWriter
+
+import mlflow
+import matplotlib.pyplot as plt
+
+from setup.config import Config
+from model.posenet import LightweightPoseNet
+from train.trainer import train_epoch, evaluate
+from train.loss import KeypointLoss
+from train.tuner import EarlyStopping
+from dataset.download_dataset import download_coco_dataset
+from dataset.keypt_dataloader import COCOKeypointDataset
+
+def mlflow_init(tracking_uri: str, experiment_name: str):
+    """Initialize MLflow"""
+    mlflow.set_tracking_uri(tracking_uri)
+    mlflow.set_experiment(experiment_name)
+
+def export_to_onnx(model, save_path, input_shape=(1, 3, 256, 256)):
+    """Export PyTorch model to ONNX format"""
+    model.eval()
+    dummy_input = torch.randn(input_shape)
+    
+    # Export to ONNX
+    torch.onnx.export(
+        model,
+        dummy_input,
+        save_path,
+        export_params=True,
+        opset_version=11,
+        do_constant_folding=True,
+        input_names=['input'],
+        output_names=['output'],
+        dynamic_axes={
+            'input': {0: 'batch_size'},
+            'output': {0: 'batch_size'}
+        }
+    )
+    print(f"Model exported to ONNX: {save_path}")
+
+
+def main():
+    tb_writer = SummaryWriter()
+    cfg = Config()
+    cfg.num_epochs = 1
+    
+    if not os.path.exists(cfg.data_dir):
+        download_coco_dataset(cfg.data_dir)
+    
+    # MLflow setup 
+    tracking_uri = "sqlite:///mlflow.db"  
+    experiment_name = "posenet"
+    mlflow_init(tracking_uri, experiment_name)
+
+    with mlflow.start_run(run_name="lightweight_posenet"):
+        
+        # Log configuration parameters
+        mlflow.log_params({
+            "num_epochs": cfg.num_epochs,
+            "batch_size": cfg.batch_size,
+            "learning_rate": cfg.learning_rate,
+            "img_size": cfg.img_size,
+            "num_keypoints": cfg.num_keypoints,
+            "device": cfg.device,
+        })
+
+    
+        transform = transforms.Compose([
+            transforms.ToPILImage(),
+            transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+
+        train_dataset = COCOKeypointDataset(cfg, transform=transform, is_train=True)
+
+        val_dataset = COCOKeypointDataset(cfg,
+            transform=transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            ]),
+            is_train=False
+        )
+
+        # Create dataloaders
+        train_loader = DataLoader(train_dataset, batch_size=cfg.batch_size,
+                                shuffle=True, num_workers=4, pin_memory=True)
+        val_loader = DataLoader(val_dataset, batch_size=cfg.batch_size,
+                            shuffle=False, num_workers=4, pin_memory=True)
+
+        # Create model
+        model = LightweightPoseNet(num_keypoints=cfg.num_keypoints)
+        model = model.to(cfg.device)
+
+        # Loss and optimizer
+        criterion = KeypointLoss()
+        optimizer = optim.Adam(model.parameters(), lr=cfg.learning_rate)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, factor=0.5)
+
+        # Early stopping
+        early_stopping = EarlyStopping(patience=cfg.early_stopping_patience)
+
+        # Create checkpoints directory
+        os.makedirs('checkpoints', exist_ok=True)
+
+        print(f"Training on {cfg.device}")
+        print(f"Train samples: {len(train_dataset)}, Val samples: {len(val_dataset)}")
+
+        # Training loop
+        for epoch in range(cfg.num_epochs):
+            print(f"\nEpoch {epoch+1}/{cfg.num_epochs}")
+
+            # Train
+            train_loss = train_epoch(model, train_loader, criterion, optimizer, cfg.device)
+
+            # Evaluate
+            validation_metrics = evaluate(model, val_loader, criterion, cfg.device)
+
+            # Logging through tensor board
+            tb_writer.add_scalar(tag='Loss/train', scalar_value=train_loss, global_step=epoch)
+            tb_writer.add_scalar(tag='Loss/valid', scalar_value=validation_metrics['loss'], global_step=epoch)
+            tb_writer.add_scalar("kp/AP@0.50", scalar_value=validation_metrics['AP@0.50'], global_step=epoch)
+            tb_writer.add_scalar('Precision', scalar_value=validation_metrics['precision'], global_step=epoch)
+            tb_writer.add_scalar("Recall", scalar_value=validation_metrics['recall'], global_step=epoch)
+            
+            # logging through mlflow
+            mlflow.log_metrics({
+                    "train_loss": train_loss,
+                    "val_loss": validation_metrics['loss'],
+                    "val_AP@0.50": validation_metrics['AP@0.50'],
+                    "val_precision": validation_metrics['precision'],
+                    "val_recall": validation_metrics['recall'],
+                    "learning_rate": optimizer.param_groups[0]['lr']
+                }, step=epoch)
+            
+            # Update learning rate
+            scheduler.step(validation_metrics['loss'])
+
+            print(f"Train Loss: {train_loss:.4f}")
+            print(f"Val Loss: {validation_metrics['loss']:.4f}")
+            print(f"LR: {optimizer.param_groups[0]['lr']:.6f}")
+
+            # Save model every n epochs
+            if (epoch + 1) % cfg.save_interval == 0:
+                checkpoint = {
+                    'epoch': epoch,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'train_loss': train_loss,
+                    'val_loss': validation_metrics['loss']
+                }
+                torch.save(checkpoint, f'checkpoints/model_epoch_{epoch+1}.pth')
+                print(f"Model saved at epoch {epoch+1}")
+
+            # Early stopping check
+            if early_stopping(validation_metrics['loss']):
+                print("Early stopping triggered!")
+                break
+
+            # Save best model
+            if validation_metrics['loss'] < early_stopping.best_loss:
+                torch.save(model.state_dict(), 'checkpoints/best_model.pth')
+                print("Best model saved!")
+
+        # Export to ONNX after training
+        print("\nExporting model to ONNX...")
+        onnx_path = 'checkpoints/posenet_model.onnx'
+        export_to_onnx(model, onnx_path, input_shape=(1, 3, cfg.img_size, cfg.img_size))
+            
+        # Log the best PyTorch model
+        mlflow.log_artifact('checkpoints/best_model.pth', "pytorch_model")
+            
+        # Log the final model state
+        mlflow.pytorch.log_model(model, "model")
+
+        print(f"\nTraining completed! ONNX model saved at: {onnx_path}")
+
+    tb_writer.close()
+
+if __name__ == '__main__' :
+    main()
+
