@@ -1,5 +1,5 @@
 # Utilities package for keypoint estimation
 from .metrics import KeyPointMetric
-from .visualize import visualize_keypoints
+from .visualize import draw_keypoints_per_person
 
-__all__ = ['KeyPointMetric', 'visualize_keypoints']
+__all__ = ['KeyPointMetric', 'draw_keypoints_per_person']
