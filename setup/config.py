@@ -26,7 +26,13 @@ class Config:
     # Training Config
     batch_size: int = 32
     num_epochs: int = 100
-    learning_rate: float = 0.001
+    learning_rate: float = 0.0001  # Reduced from 0.001 for better convergence
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     save_interval: int = 5
     early_stopping_patience: int = 10
+    
+    # Loss Config
+    loss_type: str = 'focal'  # Options: 'focal', 'focal_alt', 'mse'
+    focal_alpha: float = 2.0
+    focal_beta: float = 4.0
+    focal_gamma: float = 2.0
