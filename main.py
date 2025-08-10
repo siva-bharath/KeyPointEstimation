@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from setup.config import Config
 from model.posenet import LightweightPoseNet
 from train.trainer import train_epoch, evaluate
-from train.loss import KeypointLoss
+from train.loss import KeypointFocalLoss, KeypointMSELoss
 from train.tuner import EarlyStopping
 from dataset.download_dataset import download_coco_dataset
 from dataset.keypt_dataloader import COCOKeypointDataset
@@ -105,9 +105,22 @@ def main():
         model = model.to(cfg.device)
 
         # Loss and optimizer
-        criterion = KeypointLoss()
+        if cfg.loss_type == 'focal':
+            criterion = KeypointLoss(alpha=cfg.focal_alpha, beta=cfg.focal_beta, gamma=cfg.focal_gamma)
+        elif cfg.loss_type == 'focal_alt':
+            from train.loss import KeypointFocalLoss
+            criterion = KeypointFocalLoss(alpha=cfg.focal_alpha, gamma=cfg.focal_gamma)
+        else:  # mse
+            from train.loss import KeypointMSELoss
+            criterion = KeypointMSELoss()
+            
         optimizer = optim.Adam(model.parameters(), lr=cfg.learning_rate)
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, factor=0.5)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, 
+            patience=10,  # Increased patience for better convergence
+            factor=0.7,   # Less aggressive reduction
+            min_lr=1e-6   # Set minimum LR to prevent getting stuck
+        )
 
         # Early stopping
         early_stopping = EarlyStopping(patience=cfg.early_stopping_patience)
