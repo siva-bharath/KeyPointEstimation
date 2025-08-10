@@ -68,6 +68,7 @@ def main():
             "img_size": cfg.img_size,
             "num_keypoints": cfg.num_keypoints,
             "device": cfg.device,
+            "early_stopping_patience": cfg.early_stopping_patience,
         })
 
     
@@ -171,15 +172,19 @@ def main():
         # Export to ONNX after training
         print("\nExporting model to ONNX...")
         onnx_path = 'checkpoints/posenet_model.onnx'
-        export_to_onnx(model, onnx_path, input_shape=(1, 3, cfg.img_size, cfg.img_size))
+        try:
+            export_to_onnx(model, onnx_path, input_shape=(1, 3, cfg.img_size, cfg.img_size))
+        except Exception as e:
+            print(f"Warning: ONNX export failed: {e}")
             
-        # Log the best PyTorch model
-        mlflow.log_artifact('checkpoints/best_model.pth', "pytorch_model")
+        # Log the best PyTorch model (only if it exists)
+        if os.path.exists('checkpoints/best_model.pth'):
+            mlflow.log_artifact('checkpoints/best_model.pth', "pytorch_model")
             
         # Log the final model state
         mlflow.pytorch.log_model(model, "model")
 
-        print(f"\nTraining completed! ONNX model saved at: {onnx_path}")
+        print(f"\nTraining completed!")
 
     tb_writer.close()
 
