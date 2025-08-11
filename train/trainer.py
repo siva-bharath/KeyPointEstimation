@@ -25,10 +25,7 @@ def train_epoch(model, dataloader, criterion, optimizer, device):
         # Backward pass
         optimizer.zero_grad()
         loss.backward()
-        
-        # Gradient clipping to prevent exploding gradients
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        
+                
         optimizer.step()
 
         total_loss += loss.item()
@@ -99,8 +96,8 @@ def evaluate(model, dataloader, criterion, device):
     precision, recall = metric.compute_pr()
     ap = metric.average_precision(precision, recall)
 
-    precision_scalar = precision[-1].item()  # Last value (highest confidence)
-    recall_scalar = recall[-1].item()        # Last value (highest confidence)
+    precision_scalar = precision[-1].item() if len(precision) > 0 else 0.0  # Last value (highest confidence)
+    recall_scalar = recall[-1].item() if len(recall) > 0 else 0.0        # Last value (highest confidence)
 
     print(f"Loss = {total_loss/len(dataloader)} |[eval] AP@0.50: {ap:.4f}")
 
@@ -115,8 +112,8 @@ def heatmap_to_conf(heatmaps):
     heatmaps: (P, K, H, W) logits or probs (if logits, we apply sigmoid)
     """
     probs = torch.sigmoid(heatmaps)
-    peak_per_kpt, _ = probs.view(probs.size(0), probs.size(1), -1).max(dim=-1)  
-    return peak_per_kpt.mean(dim=1)
+    peak_per_kpt = probs.view(probs.size(0), probs.size(1), -1).max(dim=-1).values
+    return peak_per_kpt
 
 def heatmap_to_keypoints(heatmaps):
     """Convert heatmaps to keypoint coordinates"""

@@ -71,16 +71,19 @@ class PoseNetInference:
         # Resize image
         image_resized = cv2.resize(image_rgb, (self.img_size, self.img_size))
         
-        # Convert to float and normalize
+        # Convert to float32 and normalize (ensure float32 type)
         image_normalized = image_resized.astype(np.float32) / 255.0
         
         # Apply ImageNet normalization
-        mean = np.array([0.485, 0.456, 0.406])
-        std = np.array([0.229, 0.224, 0.225])
+        mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+        std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
         image_normalized = (image_normalized - mean) / std
         
         # Add batch dimension and transpose to (B, C, H, W)
         image_tensor = np.transpose(image_normalized, (2, 0, 1))[None, ...]
+        
+        # Ensure the final tensor is float32
+        image_tensor = image_tensor.astype(np.float32)
         
         return image_tensor
     
@@ -183,7 +186,6 @@ class PoseNetInference:
         # Run inference
         outputs = self.session.run([self.output_name], {self.input_name: input_tensor})
         heatmaps = outputs[0][0]  # Remove batch dimension
-        
         # Extract keypoints
         keypoints, valid_mask = self.extract_keypoints(heatmaps, confidence_threshold)
         

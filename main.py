@@ -51,9 +51,9 @@ def export_to_onnx(model, save_path, input_shape=(1, 3, 256, 256)):
 
 
 def main():
-    tb_writer = SummaryWriter()
+    tb_writer = SummaryWriter() 
     cfg = Config()
-    cfg.num_epochs = 15
+    cfg.num_epochs = 2
     
     if not os.path.exists(cfg.data_dir):
         download_coco_dataset(cfg.data_dir)

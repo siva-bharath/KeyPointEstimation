@@ -177,7 +177,3 @@ class KeyPointMetric:
         }
     
     
-if __name__ == '__main__':
-    # Test example would go here
-    pass
-    

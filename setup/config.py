@@ -32,6 +32,9 @@ class Config:
     early_stopping_patience: int = 10
     
     # Loss Config
-    loss_type: str = 'focal'  # Options: 'focal', 'mse'
-    focal_alpha: float = 2.0
-    focal_gamma: float = 2.0
+    loss_type: str = 'mse'  # Options: 'focal', 'mse', 'combined'
+    focal_alpha: float = 1.0  # Reduced from 2.0 for better balance
+    focal_gamma: float = 2.0  # Focus on hard examples
+    label_smoothing: float = 0.1  
+    focal_weight: float = 0.7  
+    mse_weight: float = 0.3   
