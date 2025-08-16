@@ -53,7 +53,7 @@ def export_to_onnx(model, save_path, input_shape=(1, 3, 256, 256)):
 def main():
     tb_writer = SummaryWriter() 
     cfg = Config()
-    cfg.num_epochs = 2
+    cfg.num_epochs = 5 # Config the number of epochs
     
     if not os.path.exists(cfg.data_dir):
         download_coco_dataset(cfg.data_dir)
@@ -105,10 +105,10 @@ def main():
         model = model.to(cfg.device)
 
         # Loss and optimizer
-        if cfg.loss_type == 'focal':
-            criterion = KeypointFocalLoss(alpha=cfg.focal_alpha, gamma=cfg.focal_gamma)
-        else:  
+        if cfg.loss_type == 'mse':
             criterion = KeypointMSELoss()
+        else:  
+            criterion = KeypointFocalLoss(alpha=cfg.focal_alpha, gamma=cfg.focal_gamma)
             
         optimizer = optim.Adam(model.parameters(), lr=cfg.learning_rate)
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(

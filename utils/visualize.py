@@ -6,23 +6,28 @@ import torch
 from PIL import Image
 
 
+# create the list of keypoints.
+human_keypoints = [
+    'nose','left_eye','right_eye','left_ear','right_ear',
+    'left_shoulder','right_shoulder','left_elbow',
+    'right_elbow','left_wrist','right_wrist','left_hip','right_hip',
+    'left_knee', 'right_knee', 'left_ankle','right_ankle'
+]
+
+
 def read_cv_image(image_path):
     """
     Read image from path and convert to cv2 format
     """
     image = cv2.imread(image_path)
 
-    if image.empty():
+    if image is None:
         raise FileNotFoundError(f"Image empty found at {image_path}")
 
     elif image.ndim == 2:
         image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
     
     return image
-
-# create the list of keypoints.
-human_keypoints = ['nose','left_eye','right_eye','left_ear','right_ear','left_shoulder','right_shoulder','left_elbow',
-                'right_elbow','left_wrist','right_wrist','left_hip','right_hip','left_knee', 'right_knee', 'left_ankle','right_ankle']
 
 
 def get_limbs_from_keypoints(keypoints):
@@ -46,17 +51,31 @@ def get_limbs_from_keypoints(keypoints):
         ]
   return limbs
 
+def to_numpy(x):
+    try:
+        import torch
+        if isinstance(x, torch.Tensor):
+            return x.detach().cpu().numpy()
+    except Exception:
+        pass
+    return np.asarray(x)
+
+
 def draw_skeleton_per_person(img_path, output, all_keypoints, all_scores, confs, keypoint_threshold=2, conf_threshold=0.9):    
     # Get the Inference
     limbs = get_limbs_from_keypoints(human_keypoints)
     img = read_cv_image(img_path)
     cmap = plt.get_cmap('rainbow')
-
     img_copy = img.copy()
+
+    LINE_THICKNESS = 2
+
     # check if the keypoints are detected
     if len(output["keypoints"])>0:
       # pick a set of N color-ids from the spectrum
+
       colors = np.arange(1,255, 255//len(all_keypoints)).tolist()[::-1]
+
       for person_id in range(len(all_keypoints)):
           # check the confidence score of the detected person
           if confs[person_id]>conf_threshold:
@@ -64,65 +83,15 @@ def draw_skeleton_per_person(img_path, output, all_keypoints, all_scores, confs,
 
             # iterate for every limb 
             for limb_id in range(len(limbs)):
-              limb_loc1 = keypoints[limbs[limb_id][0], :2].detach().numpy().astype(np.int32)
-              limb_loc2 = keypoints[limbs[limb_id][1], :2].detach().numpy().astype(np.int32)
+              limb_loc1 = keypoints[limbs[limb_id][0], :2].astype(np.int32)
+              limb_loc2 = keypoints[limbs[limb_id][1], :2].astype(np.int32)
               limb_score = min(all_scores[person_id, limbs[limb_id][0]], all_scores[person_id, limbs[limb_id][1]])
               if limb_score> keypoint_threshold:
                 color = tuple(np.asarray(cmap(colors[person_id])[:-1])*255)
-                cv2.line(img_copy, tuple(limb_loc1), tuple(limb_loc2), color, 25)
+                cv2.line(img_copy, tuple(limb_loc1), tuple(limb_loc2), color, LINE_THICKNESS)
 
     return img_copy
 
-def ensure_cv_format(image):
-    """
-    Convert various image formats to numpy array for OpenCV operations.   
-    """
-    # Handle PIL Image
-    if isinstance(image, Image.Image):
-        # PIL is RGB, convert to BGR for OpenCV
-        image_np = np.array(image)
-        return cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
-    
-    # Handle torch.Tensor
-    elif isinstance(image, torch.Tensor):
-        # Remove batch dimension if present
-        if image.dim() == 4:  # [B, C, H, W]
-            image = image.squeeze(0)
-        
-        # Convert from [C, H, W] to [H, W, C]
-        if image.dim() == 3:
-            image = image.permute(1, 2, 0)
-        
-        # Convert to numpy
-        image_np = image.detach().cpu().numpy()
-        
-        # Handle different value ranges
-        if image_np.max() <= 1.0:
-            image_np = (image_np * 255).astype(np.uint8)
-        else:
-            image_np = image_np.astype(np.uint8)
-        
-        # Convert RGB to BGR for OpenCV
-        return cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
-    
-    # Handle numpy array
-    elif isinstance(image, np.ndarray):
-        # Ensure it's uint8
-        if image.dtype != np.uint8:
-            if image.max() <= 1.0:
-                image = (image * 255).astype(np.uint8)
-            else:
-                image = image.astype(np.uint8)
-        
-        # Ensure it's BGR for OpenCV
-        if len(image.shape) == 3 and image.shape[2] == 3:
-            # If it's RGB, convert to BGR
-            return cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-        
-        return image
-    
-    else:
-        raise TypeError(f"Unsupported image type: {type(image)}. Expected PIL Image, torch.Tensor, or numpy.ndarray")
 
 def draw_keypoints_per_person(image_path, all_keypoints, all_scores, confs, keypoint_threshold=2, conf_threshold=0.9):
     """
@@ -130,7 +99,7 @@ def draw_keypoints_per_person(image_path, all_keypoints, all_scores, confs, keyp
     """
 
     # Consts
-    CIRCLE_RADIUS = 30
+    CIRCLE_RADIUS = 5
     
     # Ensure image is in correct format for OpenCV
     if not isinstance(image_path, str):
@@ -148,9 +117,38 @@ def draw_keypoints_per_person(image_path, all_keypoints, all_scores, confs, keyp
         scores = all_scores[person_id, ...]
         for kp in range(len(scores)):
             if scores[kp]>keypoint_threshold:
-                keypoint = tuple(map(int, keypoints[kp, :2].detach().numpy().tolist()))
+                keypoint = tuple(map(int, keypoints[kp, :2].tolist()))
                 color = tuple(np.asarray(cmap(color_id[person_id])[:-1])*255)
-                cv2.circle(img_copy, keypoint, 30, color, -1)
+                cv2.circle(img_copy, keypoint, CIRCLE_RADIUS, color, -1)
 
     return img_copy
+
+
+def draw_keypoints(image_path, all_keypoints, all_scores, confs,
+                              keypoint_threshold=2, conf_threshold=0.9):
+    """Draw only keypoints"""
+    CIRCLE_RADIUS = 4
+    img = read_cv_image(image_path)
+    cmap = plt.get_cmap('rainbow')
+    img_copy = img.copy()
+
+    # Force NumPy
+
+    all_keypoints = to_numpy(all_keypoints)
+    all_scores    = to_numpy(all_scores)
+    confs         = to_numpy(confs)
+
+    color_id = np.arange(1, 255, max(1, 255 // len(all_keypoints))).tolist()[::-1]
+
+    for person_id in range(len(all_keypoints)):
+        if float(confs[person_id]) > conf_threshold:
+            keypoints = all_keypoints[person_id, ...]
+            scores    = all_scores[person_id, ...]
+            for kp in range(len(scores)):
+                if float(scores[kp]) > keypoint_threshold:
+                    pt = tuple(keypoints[kp, :2].astype(np.int32).tolist())
+                    color = tuple((np.asarray(cmap(color_id[person_id])[:-1]) * 255).astype(np.uint8).tolist())
+                    cv2.circle(img_copy, pt, CIRCLE_RADIUS, color, -1, lineType=cv2.LINE_AA)
+    return img_copy
+
 
